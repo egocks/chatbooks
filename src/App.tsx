@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AuthProvider, useAuth } from './hooks/useAuth';
+import { useState } from 'react';
+import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LandingPage } from './components/Landing/LandingPage';
 import { LoginForm } from './components/Auth/LoginForm';
 import { RegisterForm } from './components/Auth/RegisterForm';
@@ -13,7 +13,7 @@ import { AuthorBooksView } from './components/Author/AuthorBooksView';
 import { BookEditor } from './components/Author/BookEditor';
 
 function AppContent() {
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [currentView, setCurrentView] = useState('dashboard');
@@ -109,9 +109,7 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <AppContent />
   );
 }
 
