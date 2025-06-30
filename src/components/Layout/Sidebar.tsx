@@ -1,6 +1,6 @@
 import React from 'react';
 import { Book, Users, BarChart3, Settings, Home, BookOpen, Headphones, MessageSquare } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { useSupabaseAuth } from '../../hooks/useSupabaseAuth';
 
 interface SidebarProps {
   currentView: string;
@@ -10,7 +10,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentView, onViewChange, isOpen, onClose }: SidebarProps) {
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
 
   const authorMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },

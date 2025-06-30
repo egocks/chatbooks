@@ -1,14 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Book, Headphones, MessageCircle, ArrowLeft, Bookmark, Play, Pause, SkipBack, SkipForward, Mic, MicOff, Volume2 } from 'lucide-react';
-import { mockBooks } from '../../data/mockData';
-import { ChatMessage } from '../../types';
+import { useBook } from '../../hooks/useBooks';
+import { chatService } from '../../services/chat.service';
+import { useSupabaseAuth } from '../../hooks/useSupabaseAuth';
 
 interface BookReaderProps {
   bookId: string;
   onClose: () => void;
 }
 
+interface ChatMessage {
+  id: string;
+  type: 'user' | 'bot';
+  content: string;
+  timestamp: string;
+}
+
 export function BookReader({ bookId, onClose }: BookReaderProps) {
+  const { user } = useSupabaseAuth();
+  const { book, loading } = useBook(bookId);
   const [mode, setMode] = useState<'text' | 'audio' | 'chat'>('text');
   const [currentChapter, setCurrentChapter] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -17,57 +27,101 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
   const [chatInput, setChatInput] = useState('');
   const [textSelection, setTextSelection] = useState<string>('');
   const [audioPosition, setAudioPosition] = useState(0);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  const book = mockBooks.find(b => b.id === bookId);
-  if (!book) return null;
+  useEffect(() => {
+    if (book && book.chapters.length > 0 && user) {
+      loadChatHistory();
+    }
+  }, [book, currentChapter, user]);
 
-  const chapter = book.chapters[currentChapter];
-
-  // Mock AI responses
-  const generateAIResponse = (userMessage: string) => {
-    const responses = [
-      "That's a fascinating perspective! In the context of this chapter, I think about how digital creativity allows us to explore ideas that were previously impossible to visualize.",
-      "Great question! This connects to broader themes in the book about how technology amplifies rather than replaces human intuition.",
-      "I'm glad you brought that up. This particular section explores how the democratization of creative tools is reshaping entire industries.",
-      "Interesting observation! What you're noticing here relates to the tension between technological efficiency and human authenticity that I discuss throughout the book."
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
-
-  const handleChatSubmit = () => {
-    if (!chatInput.trim()) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: chatInput,
-      timestamp: new Date().toISOString(),
-      chapterId: chapter.id
-    };
-
-    const aiResponse: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      type: 'bot',
-      content: generateAIResponse(chatInput),
-      timestamp: new Date().toISOString(),
-      chapterId: chapter.id
-    };
-
-    setChatMessages(prev => [...prev, userMessage, aiResponse]);
-    setChatInput('');
-  };
-
-  const synthesizeChat = () => {
-    const chatSummary = chatMessages
-      .filter(msg => msg.type === 'bot')
-      .map(msg => msg.content)
-      .join(' ');
+  const loadChatHistory = async () => {
+    if (!book || !user) return;
     
-    alert(`Chat synthesized! This summary would be integrated into the chapter:\n\n"${chatSummary.substring(0, 200)}..."`);
+    const chapter = book.chapters[currentChapter];
+    if (!chapter) return;
+
+    try {
+      const history = await chatService.getChatHistory(user.id, chapter.id);
+      setChatMessages(history.map(msg => ({
+        id: msg.id,
+        type: msg.type,
+        content: msg.content,
+        timestamp: msg.timestamp,
+      })));
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    }
+  };
+
+  const handleChatSubmit = async () => {
+    if (!chatInput.trim() || !book || !user || sendingMessage) return;
+
+    const chapter = book.chapters[currentChapter];
+    if (!chapter) return;
+
+    try {
+      setSendingMessage(true);
+      
+      const userMessage: ChatMessage = {
+        id: Date.now().toString(),
+        type: 'user',
+        content: chatInput,
+        timestamp: new Date().toISOString(),
+      };
+
+      setChatMessages(prev => [...prev, userMessage]);
+      setChatInput('');
+
+      const response = await chatService.sendMessage(
+        user.id,
+        chapter.id,
+        chatInput,
+        {
+          chapterId: chapter.id,
+          chapterTitle: chapter.title,
+          chapterContent: chapter.content,
+          bookTitle: book.title,
+          authorName: 'Author', // Would come from book.users in real implementation
+        }
+      );
+
+      const aiMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: response.content,
+        timestamp: response.timestamp,
+      };
+
+      setChatMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('Failed to send message. Please try again.');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const synthesizeChat = async () => {
+    if (!book || !user) return;
+    
+    const chapter = book.chapters[currentChapter];
+    if (!chapter) return;
+
+    try {
+      const synthesis = await chatService.synthesizeChat(user.id, chapter.id);
+      alert(`Chat synthesized! This summary would be integrated into the chapter:\n\n"${synthesis.substring(0, 200)}..."`);
+    } catch (error) {
+      console.error('Error synthesizing chat:', error);
+      alert('Failed to synthesize chat. Please try again.');
+    }
   };
 
   const addBookmark = () => {
+    if (!book) return;
+    
+    const chapter = book.chapters[currentChapter];
     const bookmark = {
       id: Date.now().toString(),
       type: mode,
@@ -85,11 +139,48 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
     }
   }, [chatMessages]);
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-500"></div>
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <div className="text-center py-12">
+        <h3 className="text-xl font-semibold text-primary-900 mb-2">Book not found</h3>
+        <button
+          onClick={onClose}
+          className="text-accent-600 hover:text-accent-700 font-medium"
+        >
+          Go back
+        </button>
+      </div>
+    );
+  }
+
+  const chapter = book.chapters[currentChapter];
+  if (!chapter) {
+    return (
+      <div className="text-center py-12">
+        <h3 className="text-xl font-semibold text-primary-900 mb-2">Chapter not found</h3>
+        <button
+          onClick={onClose}
+          className="text-accent-600 hover:text-accent-700 font-medium"
+        >
+          Go back
+        </button>
+      </div>
+    );
+  }
+
   const renderTextMode = () => (
     <div className="bg-white rounded-xl shadow-sm border border-primary-200 p-8 max-w-4xl mx-auto">
       <div className="prose prose-lg max-w-none">
         <h1 className="text-3xl font-bold text-primary-900 mb-6">{chapter.title}</h1>
-        {chapter.exclusiveChat ? (
+        {chapter.exclusive_chat ? (
           <div className="bg-gradient-to-r from-primary-100 to-accent-100 rounded-lg p-8 text-center">
             <MessageCircle className="mx-auto mb-4 text-accent-500" size={48} />
             <h3 className="text-xl font-bold text-primary-900 mb-2">Exclusive Chat Content</h3>
@@ -124,12 +215,12 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
     <div className="bg-white rounded-xl shadow-sm border border-primary-200 p-8 max-w-2xl mx-auto text-center">
       <div className="mb-8">
         <img
-          src={book.cover}
+          src={book.cover_url || "https://images.pexels.com/photos/159866/books-book-pages-read-literature-159866.jpeg?auto=compress&cs=tinysrgb&w=400"}
           alt={book.title}
           className="w-48 h-64 mx-auto rounded-lg shadow-lg mb-6"
         />
         <h2 className="text-2xl font-bold text-primary-900 mb-2">{chapter.title}</h2>
-        <p className="text-primary-600">{book.author}</p>
+        <p className="text-primary-600">By Author</p>
       </div>
 
       <div className="bg-primary-50 rounded-lg p-6 mb-6">
@@ -185,10 +276,10 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
         <div className="p-6 border-b border-primary-200">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 bg-gradient-to-r from-accent-500 to-accent-600 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-lg">{book.author[0]}</span>
+              <span className="text-white font-bold text-lg">A</span>
             </div>
             <div>
-              <h3 className="font-bold text-primary-900">{book.author} AI Avatar</h3>
+              <h3 className="font-bold text-primary-900">Author AI Avatar</h3>
               <p className="text-sm text-primary-600">Ask me about "{chapter.title}"</p>
             </div>
           </div>
@@ -218,6 +309,17 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
               </div>
             </div>
           ))}
+
+          {sendingMessage && (
+            <div className="flex justify-start">
+              <div className="bg-primary-100 text-primary-900 px-4 py-2 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                  <span>Thinking...</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-6 border-t border-primary-200">
@@ -237,9 +339,10 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
+              onKeyPress={(e) => e.key === 'Enter' && !sendingMessage && handleChatSubmit()}
               placeholder="Ask about this chapter..."
-              className="flex-1 px-4 py-2 border border-primary-300 rounded-lg focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+              disabled={sendingMessage}
+              className="flex-1 px-4 py-2 border border-primary-300 rounded-lg focus:ring-2 focus:ring-accent-500 focus:border-transparent disabled:opacity-50"
             />
             <button
               onClick={() => setIsListening(!isListening)}
@@ -251,7 +354,8 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
             </button>
             <button
               onClick={handleChatSubmit}
-              className="bg-accent-500 hover:bg-accent-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              disabled={sendingMessage || !chatInput.trim()}
+              className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg font-medium transition-colors"
             >
               Send
             </button>
@@ -290,7 +394,7 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
                   <Book size={16} className="inline mr-2" />
                   Text
                 </button>
-                {book.hasAudio && (
+                {book.has_audio && (
                   <button
                     onClick={() => setMode('audio')}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -301,7 +405,7 @@ export function BookReader({ bookId, onClose }: BookReaderProps) {
                     Audio
                   </button>
                 )}
-                {chapter.chatEnabled && (
+                {chapter.chat_enabled && (
                   <button
                     onClick={() => setMode('chat')}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${

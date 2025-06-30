@@ -1,6 +1,6 @@
 import React from 'react';
 import { Book, User, MessageCircle, Menu, X } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { useSupabaseAuth } from '../../hooks/useSupabaseAuth';
 import { useState } from 'react';
 
 interface HeaderProps {
@@ -9,7 +9,7 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuToggle, showMenu }: HeaderProps) {
-  const { user, logout } = useAuth();
+  const { user, logout } = useSupabaseAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   return (
@@ -27,7 +27,7 @@ export function Header({ onMenuToggle, showMenu }: HeaderProps) {
             )}
             <div className="flex items-center space-x-2">
               <Book className="h-8 w-8 text-accent-500" />
-              <span className="text-xl font-bold text-primary-900">ChatBooks</span>
+              <span className="text-xl font-bold text-primary-900">ChatMyBooks</span>
             </div>
           </div>
 

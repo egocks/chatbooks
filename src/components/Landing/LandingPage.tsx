@@ -15,7 +15,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
           <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-8">
               <Book className="h-12 w-12 text-accent-400" />
-              <span className="text-4xl font-bold text-white">ChatBooks</span>
+              <span className="text-4xl font-bold text-white">ChatMyBooks</span>
             </div>
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
               Books That
@@ -135,7 +135,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-primary-900 mb-4">
-              Why Authors Choose ChatBooks
+              Why Authors Choose ChatMyBooks
             </h2>
             <p className="text-xl text-primary-600 max-w-3xl mx-auto">
               Engage your readers like never before and build lasting connections
@@ -204,10 +204,10 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center space-x-2 mb-8">
             <Book className="h-8 w-8 text-accent-400" />
-            <span className="text-2xl font-bold">ChatBooks</span>
+            <span className="text-2xl font-bold">ChatMyBooks</span>
           </div>
           <div className="text-center text-primary-300">
-            <p>&copy; 2024 ChatBooks. The future of interactive reading.</p>
+            <p>&copy; 2024 ChatMyBooks. The future of interactive reading.</p>
           </div>
         </div>
       </footer>
